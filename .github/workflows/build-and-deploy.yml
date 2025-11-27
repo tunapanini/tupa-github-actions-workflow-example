@@ -265,6 +265,27 @@ jobs:
             echo "emoji=❌" >> $GITHUB_OUTPUT
           fi
 
+          # 서비스별 배포 결과 수집 (실제 실행된 서비스만)
+          SERVICE_LIST=""
+
+          # deploy-services job이 실행되었는지 확인
+          if [[ "$DEPLOY_RESULT" != "skipped" ]]; then
+            # 전체 결과에 따라 모든 서비스에 동일한 상태 적용
+            for service in api-gateway user-service order-service payment-service notification-service; do
+              if [[ "$DEPLOY_RESULT" == "success" ]]; then
+                SERVICE_LIST="${SERVICE_LIST}- ${service}: ✅\n"
+              elif [[ "$DEPLOY_RESULT" == "failure" ]]; then
+                SERVICE_LIST="${SERVICE_LIST}- ${service}: ❌\n"
+              else
+                SERVICE_LIST="${SERVICE_LIST}- ${service}: ⚠️\n"
+              fi
+            done
+          fi
+
+          echo "service_list<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$SERVICE_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Send Slack notification
         run: |
           echo ❤️
@@ -273,6 +294,10 @@ jobs:
           echo "*Status:*\n${{ steps.check-results.outputs.status }}"
           echo "*Image Tag:*\n${{ needs.build.outputs.image_tag }}"
           echo "*Triggered by:*\n${{ github.actor }}"
+          echo ""
+          echo "*배포 서비스:*"
+          echo "${{ steps.check-results.outputs.service_list }}"
+          echo ""
           echo "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>"
         # uses: slackapi/slack-github-action@v1.26.0
         # with:
@@ -314,7 +339,7 @@ jobs:
         #               "type": "section",
         #               "text": {
         #                 "type": "mrkdwn",
-        #                 "text": "*배포 서비스:*\n• api-gateway\n• user-service\n• order-service\n• payment-service\n• notification-service"
+        #                 "text": "*배포 서비스:*\n${{ steps.check-results.outputs.service_list }}"
         #               }
         #             },
         #             {
