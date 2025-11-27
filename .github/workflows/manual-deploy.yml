@@ -157,13 +157,6 @@ jobs:
         #   echo "  --service ${{ steps.env-config.outputs.service_name }} \\"
         #   echo "  --force-new-deployment"
 
-      - name: Wait for deployment
-        run: "echo ❤️"
-        # run: |
-        #   echo "⏳ Waiting for service stability..."
-        #   echo "aws ecs wait services-stable --cluster ${{ steps.env-config.outputs.cluster_name }} --services ${{ steps.env-config.outputs.service_name }}"
-        #   echo "✅ ${{ matrix.service.name }} deployed successfully!"
-
   # ============================================
   # 배포 결과 알림
   # ============================================

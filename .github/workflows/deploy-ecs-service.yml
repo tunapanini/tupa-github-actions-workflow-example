@@ -148,13 +148,3 @@ jobs:
         #   echo "  --task-definition ${{ steps.register-task-def.outputs.task_definition_arn }} \\"
         #   echo "  --desired-count ${{ steps.env-config.outputs.desired_count }} \\"
         #   echo "  --force-new-deployment"
-
-      - name: Wait for deployment stability
-        run: "echo ❤️"
-        # run: |
-        #   echo "Waiting for service stability..."
-        #   echo "aws ecs wait services-stable \\"
-        #   echo "  --cluster ${{ steps.env-config.outputs.cluster_name }} \\"
-        #   echo "  --services ${{ steps.env-config.outputs.service_name }}"
-
-        #   echo "✅ Service ${{ inputs.service_name }} deployed successfully!"
