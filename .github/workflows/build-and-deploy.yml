@@ -1,0 +1,220 @@
+name: Build and Deploy to ECS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "배포 환경 선택"
+        required: true
+        default: "development"
+        type: choice
+        options:
+          - development
+          - production
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: my-app
+
+jobs:
+  # ============================================
+  # Job 1: Docker 이미지 빌드 및 ECR 푸시
+  # ============================================
+  build:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.build-image.outputs.image_tag }}
+      environment: ${{ steps.set-env.outputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Environment
+        id: set-env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS credentials
+        run: "echo ❤️"
+        # uses: aws-actions/configure-aws-credentials@v4
+        # with:
+        #   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        #   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        #   aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        run: "echo ❤️"
+        # uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        run: "echo ❤️"
+        # env:
+        #   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        #   IMAGE_TAG: ${{ github.sha }}
+        # run: |
+        #   # Docker 빌드 및 푸시 (예제)
+        #   echo "Building Docker image..."
+        #   echo "docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ."
+        #   echo "docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+        #   echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+        #   echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  # ============================================
+  # Job 2: 배포 승인 대기
+  # ============================================
+  approve-deployment:
+    name: Approve Deployment
+    runs-on: ubuntu-latest
+    needs: build
+    environment: ${{ needs.build.outputs.environment }}-approval
+
+    steps:
+      - name: Deployment Approval
+        run: |
+          echo "🚀 배포 승인됨"
+          echo "Environment: ${{ needs.build.outputs.environment }}"
+          echo "Image Tag: ${{ needs.build.outputs.image_tag }}"
+
+  # ============================================
+  # Job 3: ECS 병렬 배포 (5개 서비스)
+  # ============================================
+  deploy-services:
+    name: Deploy to ECS
+    needs: [build, approve-deployment]
+    uses: ./.github/workflows/deploy-ecs-service.yml
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: api-gateway
+            task_definition_suffix: api-gateway
+            cluster_suffix: main
+          - name: user-service
+            task_definition_suffix: user-svc
+            cluster_suffix: main
+          - name: order-service
+            task_definition_suffix: order-svc
+            cluster_suffix: main
+          - name: payment-service
+            task_definition_suffix: payment-svc
+            cluster_suffix: payment
+          - name: notification-service
+            task_definition_suffix: notification-svc
+            cluster_suffix: async
+    with:
+      environment: ${{ needs.build.outputs.environment }}
+      image_tag: ${{ needs.build.outputs.image_tag }}
+      service_name: ${{ matrix.service.name }}
+      task_definition_suffix: ${{ matrix.service.task_definition_suffix }}
+      cluster_suffix: ${{ matrix.service.cluster_suffix }}
+    secrets: inherit
+
+  # ============================================
+  # Job 4: 배포 결과 취합 및 슬랙 알림
+  # ============================================
+  notify:
+    name: Notify Deployment Result
+    runs-on: ubuntu-latest
+    needs: [build, deploy-services]
+    if: always()
+
+    steps:
+      - name: Check deployment results
+        id: check-results
+        run: |
+          # 배포 결과 확인
+          DEPLOY_RESULT="${{ needs.deploy-services.result }}"
+
+          if [[ "$DEPLOY_RESULT" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "color=#36a64f" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "color=#dc3545" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Slack notification
+        run: |
+          echo ❤️
+          echo "[${{steps.check-results.outputs.color}}] ${{ steps.check-results.outputs.emoji }} ECS 배포 결과"
+          echo "*Environment:*\n${{ needs.build.outputs.environment }}"
+          echo "*Status:*\n${{ steps.check-results.outputs.status }}"
+          echo "*Image Tag:*\n${{ needs.build.outputs.image_tag }}"
+          echo "*Triggered by:*\n${{ github.actor }}"
+          echo ""<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>""
+        # uses: slackapi/slack-github-action@v1.26.0
+        # with:
+        #   payload: |
+        #     {
+        #       "attachments": [
+        #         {
+        #           "color": "${{ steps.check-results.outputs.color }}",
+        #           "blocks": [
+        #             {
+        #               "type": "header",
+        #               "text": {
+        #                 "type": "plain_text",
+        #                 "text": "${{ steps.check-results.outputs.emoji }} ECS 배포 결과"
+        #               }
+        #             },
+        #             {
+        #               "type": "section",
+        #               "fields": [
+        #                 {
+        #                   "type": "mrkdwn",
+        #                   "text": "*Environment:*\n${{ needs.build.outputs.environment }}"
+        #                 },
+        #                 {
+        #                   "type": "mrkdwn",
+        #                   "text": "*Status:*\n${{ steps.check-results.outputs.status }}"
+        #                 },
+        #                 {
+        #                   "type": "mrkdwn",
+        #                   "text": "*Image Tag:*\n${{ needs.build.outputs.image_tag }}"
+        #                 },
+        #                 {
+        #                   "type": "mrkdwn",
+        #                   "text": "*Triggered by:*\n${{ github.actor }}"
+        #                 }
+        #               ]
+        #             },
+        #             {
+        #               "type": "section",
+        #               "text": {
+        #                 "type": "mrkdwn",
+        #                 "text": "*배포 서비스:*\n• api-gateway\n• user-service\n• order-service\n• payment-service\n• notification-service"
+        #               }
+        #             },
+        #             {
+        #               "type": "context",
+        #               "elements": [
+        #                 {
+        #                   "type": "mrkdwn",
+        #                   "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>"
+        #                 }
+        #               ]
+        #             }
+        #           ]
+        #         }
+        #       ]
+        #     }
+        # env:
+        #   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        #   SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
