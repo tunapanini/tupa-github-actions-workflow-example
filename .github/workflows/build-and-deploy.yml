@@ -95,7 +95,7 @@ jobs:
   deploy-services:
     name: Deploy to ECS
     needs: [build, approve-deployment]
-    uses: ./.github/workflows/deploy-ecs-service.yml
+    uses: ./.github/workflows/_deploy-ecs-service.yml
     strategy:
       fail-fast: false
       matrix:
