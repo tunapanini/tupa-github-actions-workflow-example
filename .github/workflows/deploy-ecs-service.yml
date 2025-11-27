@@ -28,6 +28,7 @@ jobs:
   deploy:
     name: Deploy ${{ inputs.service_name }}
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}-${{ inputs.service_name }}
 
     env:
       # 환경별 공통 설정
