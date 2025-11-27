@@ -133,17 +133,13 @@ jobs:
 
       - name: Deploy to ECS
         id: deploy-ecs
-        run: "echo ❤️"
-        # run: |
-        #   echo "🚀 Deploying to ECS..."
-        #   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        #   echo "Environment: ${{ inputs.environment }}"
-        #   echo "Service: ${{ inputs.service_name }}"
-        #   echo "Cluster: ${{ steps.env-config.outputs.cluster_name }}"
-        #   echo "Task Definition: ${{ steps.env-config.outputs.task_definition }}"
-        #   echo "Image Tag: ${{ inputs.image_tag }}"
-        #   echo "Desired Count: ${{ steps.env-config.outputs.desired_count }}"
-        #   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        run: |
+          echo "🚀 Deploying to ECS..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Service: ${{ inputs.service_name }}"
+          echo "Image Tag: ${{ inputs.image_tag }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
         #   # ECS 서비스 업데이트 (예제)
         #   echo "aws ecs update-service \\"
