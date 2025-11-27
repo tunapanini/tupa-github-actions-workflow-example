@@ -158,7 +158,7 @@ jobs:
           echo "*Status:*\n${{ steps.check-results.outputs.status }}"
           echo "*Image Tag:*\n${{ needs.build.outputs.image_tag }}"
           echo "*Triggered by:*\n${{ github.actor }}"
-          echo ""<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>""
+          echo "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>"
         # uses: slackapi/slack-github-action@v1.26.0
         # with:
         #   payload: |
