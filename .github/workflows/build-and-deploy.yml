@@ -93,9 +93,10 @@ jobs:
   # Job 3: ECS 병렬 배포 (5개 서비스)
   # ============================================
   deploy-services:
-    name: Deploy to ECS
+    name: Deploy ${{ matrix.service.name }}
     needs: [build, approve-deployment]
-    uses: ./.github/workflows/_deploy-ecs-service.yml
+    runs-on: ubuntu-latest
+    environment: ${{ needs.build.outputs.environment }}-${{ matrix.service.name }}
     strategy:
       fail-fast: false
       matrix:
@@ -115,13 +116,128 @@ jobs:
           - name: notification-service
             task_definition_suffix: notification-svc
             cluster_suffix: async
-    with:
-      environment: ${{ needs.build.outputs.environment }}
-      image_tag: ${{ needs.build.outputs.image_tag }}
-      service_name: ${{ matrix.service.name }}
-      task_definition_suffix: ${{ matrix.service.task_definition_suffix }}
-      cluster_suffix: ${{ matrix.service.cluster_suffix }}
-    secrets: inherit
+
+    steps:
+      - name: Set environment-specific variables
+        id: env-config
+        run: |
+          ENV="${{ needs.build.outputs.environment }}"
+
+          # 환경별 공통 변수 설정
+          if [[ "$ENV" == "production" ]]; then
+            echo "account_id=111111111111" >> $GITHUB_OUTPUT
+            echo "vpc_subnet=subnet-prod-xxxxx" >> $GITHUB_OUTPUT
+            echo "security_group=sg-prod-xxxxx" >> $GITHUB_OUTPUT
+            echo "log_level=warn" >> $GITHUB_OUTPUT
+            echo "desired_count=3" >> $GITHUB_OUTPUT
+          else
+            echo "account_id=222222222222" >> $GITHUB_OUTPUT
+            echo "vpc_subnet=subnet-dev-xxxxx" >> $GITHUB_OUTPUT
+            echo "security_group=sg-dev-xxxxx" >> $GITHUB_OUTPUT
+            echo "log_level=debug" >> $GITHUB_OUTPUT
+            echo "desired_count=1" >> $GITHUB_OUTPUT
+          fi
+
+          # 서비스별 변수 조합
+          echo "cluster_name=$ENV-cluster-${{ matrix.service.cluster_suffix }}" >> $GITHUB_OUTPUT
+          echo "task_definition=$ENV-task-${{ matrix.service.task_definition_suffix }}" >> $GITHUB_OUTPUT
+          echo "service_name=$ENV-svc-${{ matrix.service.name }}" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        run: "echo ❤️"
+        # uses: aws-actions/configure-aws-credentials@v4
+        # with:
+        #   aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        #   aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        #   aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download task definition
+        id: download-task-def
+        run: "echo ❤️"
+        # run: |
+        #   # Task Definition 다운로드 (예제)
+        #   echo "Downloading task definition: ${{ steps.env-config.outputs.task_definition }}"
+        #   echo "aws ecs describe-task-definition --task-definition ${{ steps.env-config.outputs.task_definition }} --query taskDefinition > task-definition.json"
+
+        #   # 예제용 더미 task definition 생성
+        #   cat << 'EOF' > task-definition.json
+        #   {
+        #     "family": "${{ steps.env-config.outputs.task_definition }}",
+        #     "containerDefinitions": [
+        #       {
+        #         "name": "${{ matrix.service.name }}",
+        #         "image": "PLACEHOLDER",
+        #         "cpu": 256,
+        #         "memory": 512,
+        #         "essential": true,
+        #         "portMappings": [
+        #           {
+        #             "containerPort": 8080,
+        #             "protocol": "tcp"
+        #           }
+        #         ],
+        #         "environment": [
+        #           {
+        #             "name": "LOG_LEVEL",
+        #             "value": "${{ steps.env-config.outputs.log_level }}"
+        #           },
+        #           {
+        #             "name": "ENVIRONMENT",
+        #             "value": "${{ needs.build.outputs.environment }}"
+        #           }
+        #         ]
+        #       }
+        #     ]
+        #   }
+        #   EOF
+
+      - name: Update task definition with new image
+        id: update-task-def
+        run: "echo ❤️"
+        # run: |
+        #   ECR_REGISTRY="${{ steps.env-config.outputs.account_id }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com"
+        #   NEW_IMAGE="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ needs.build.outputs.image_tag }}"
+
+        #   echo "Updating task definition with image: $NEW_IMAGE"
+        #   echo "new_image=$NEW_IMAGE" >> $GITHUB_OUTPUT
+
+        #   # 예제: jq로 이미지 교체
+        #   echo "jq '.containerDefinitions[0].image = \"'$NEW_IMAGE'\"' task-definition.json > updated-task-definition.json"
+
+      - name: Register new task definition
+        id: register-task-def
+        run: "echo ❤️"
+        # run: |
+        #   echo "Registering new task definition..."
+        #   echo "aws ecs register-task-definition --cli-input-json file://updated-task-definition.json"
+
+        #   # 예제용 revision 출력
+        #   echo "task_definition_arn=arn:aws:ecs:${{ env.AWS_REGION }}:${{ steps.env-config.outputs.account_id }}:task-definition/${{ steps.env-config.outputs.task_definition }}:42" >> $GITHUB_OUTPUT
+
+      - name: Deploy to ECS
+        id: deploy-ecs
+        run: |
+          echo "🚀 Deploying to ECS..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Environment: ${{ needs.build.outputs.environment }}"
+          echo "Service: ${{ matrix.service.name }}"
+          echo "Image Tag: ${{ needs.build.outputs.image_tag }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        #   # ECS 서비스 업데이트 (예제)
+        #   echo "aws ecs update-service \\"
+        #   echo "  --cluster ${{ steps.env-config.outputs.cluster_name }} \\"
+        #   echo "  --service ${{ steps.env-config.outputs.service_name }} \\"
+        #   echo "  --task-definition ${{ steps.register-task-def.outputs.task_definition_arn }} \\"
+        #   echo "  --desired-count ${{ steps.env-config.outputs.desired_count }} \\"
+        #   echo "  --force-new-deployment"
+
+      - name: Wait for deployment
+        run: "echo ❤️"
+        # run: |
+        #   echo "⏳ Waiting for service stability..."
+        #   echo "aws ecs wait services-stable --cluster ${{ steps.env-config.outputs.cluster_name }} --services ${{ steps.env-config.outputs.service_name }}"
+        #   echo "✅ ${{ matrix.service.name }} deployed successfully!"
 
   # ============================================
   # Job 4: 배포 결과 취합 및 슬랙 알림
